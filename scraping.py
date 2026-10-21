@@ -7,9 +7,7 @@ import requests
 
 load_dotenv()
 
-projectId = sys.argv[1]
 BASE_URL = os.getenv("GITLAB_URL")
-
 
 conn = psycopg2.connect(
     host=os.getenv("DB_HOST", "localhost"),
@@ -97,12 +95,12 @@ def calcular_segundos(string_inicio, string_fim):
     return diferenca.total_seconds()
 
 
-def getJobsByPipelineId(projectId, pipelineId, cur):
+def getJobsByPipelineId(projectId, pipelineId, cur, after, before):
     vazio = False
     page = 1
     while not vazio:
         res = realizaRequest(
-            f"/projects/{projectId}/pipelines/{pipelineId}/jobs?created_after=2024-12-31T23:59:59Z&page={page}&per_page=100&created_before=2026-08-01T18:04:41Z"
+            f"/projects/{projectId}/pipelines/{pipelineId}/jobs?page={page}&per_page=100&created_after={after}&created_before={before}"
         )
         jobs = res.json()
         vazio = len(jobs) < 100
@@ -138,12 +136,12 @@ def getJobsByPipelineId(projectId, pipelineId, cur):
                 conn.rollback()
 
 
-def getPipelinesByProjectId(projectId, cur):
+def getPipelinesByProjectId(projectId, cur, after, before):
     vazio = False
     page = 1
     while not vazio:
         res = realizaRequest(
-            f"/projects/{projectId}/pipelines?created_after=2024-12-31T23:59:59Z&page={page}&per_page=100&created_before=2026-08-01T18:04:41Z"
+            f"/projects/{projectId}/pipelines?page={page}&per_page=100&created_after={after}&created_before={before}"
         )
         pipelines = res.json()
         vazio = len(pipelines) < 100
@@ -176,27 +174,35 @@ def getPipelinesByProjectId(projectId, cur):
                     ),
                 )
                 conn.commit()
-                getJobsByPipelineId(projectId, pipeline["id"], cur)
+                getJobsByPipelineId(projectId, pipeline["id"], cur, after, before)
             except Exception as e:
                 conn.rollback()
                 print(e)
 
 
-projeto = getProjectById(projectId)
+caminho_arquivo = 'projetos.json'
+after = '2026-06-01T00:00:00Z';
+before = '2026-06-30T23:59:59Z';
+
 with conn.cursor() as cur:
     criaTabelas(cur)
-    try:
-        cur.execute(
-            """
-                            INSERT INTO projetos (id, name, url)
-                            VALUES (%s, %s, %s)
-                        """,
-            (projeto["id"], projeto["name"], projeto["url"]),
-        )
-        conn.commit()
-    except Exception as e:
-        conn.rollback()
-        print(e)
-    getPipelinesByProjectId(projeto["id"], cur)
+    with open(caminho_arquivo, "r", encoding="utf-8") as arquivo:
+        dados = json.load(arquivo)
+        for item in dados:
+            projectId = item['id']
+            projeto = getProjectById(projectId)
+            try:
+                cur.execute(
+                    """
+                                    INSERT INTO projetos (id, name, url)
+                                    VALUES (%s, %s, %s)
+                                """,
+                    (projeto["id"], projeto["name"], projeto["url"]),
+                )
+                conn.commit()
+            except Exception as e:
+                conn.rollback()
+                print(e)    
+            getPipelinesByProjectId(projeto["id"], cur, after, before)
 conn.commit()
 conn.close()
