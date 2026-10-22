@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   postgres:
@@ -15,9 +15,23 @@ services:
     networks:
       - gitlab-network
 
+  metabase:
+    container_name: metabase-gitlab
+    image: metabase/metabase:latest
+    ports:
+      - "3001:3000"
+    volumes:
+      - metabase_data:/metabase-data
+    environment:
+      MB_DB_TYPE: h2
+    networks:
+      - gitlab-network
+    restart: unless-stopped
+
 networks:
-   gitlab-network:
+  gitlab-network:
     driver: bridge
 
 volumes:
   postgres_data:
+  metabase_data:

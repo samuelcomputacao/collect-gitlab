@@ -9,6 +9,9 @@ load_dotenv()
 
 BASE_URL = os.getenv("GITLAB_URL")
 
+created_after='2026-06-30T23:59:59Z'
+created_before='2026-10-31T23:59:59Z'
+
 conn = psycopg2.connect(
     host=os.getenv("DB_HOST", "localhost"),
     database=os.getenv("DB_NAME", "gitlab_data"),
@@ -95,12 +98,12 @@ def calcular_segundos(string_inicio, string_fim):
     return diferenca.total_seconds()
 
 
-def getJobsByPipelineId(projectId, pipelineId, cur, after, before):
+def getJobsByPipelineId(projectId, pipelineId, cur):
     vazio = False
     page = 1
     while not vazio:
         res = realizaRequest(
-            f"/projects/{projectId}/pipelines/{pipelineId}/jobs?page={page}&per_page=100&created_after={after}&created_before={before}"
+            f"/projects/{projectId}/pipelines/{pipelineId}/jobs?page={page}&per_page=100&created_after={created_after}&created_before={created_before}"
         )
         jobs = res.json()
         vazio = len(jobs) < 100
@@ -136,12 +139,12 @@ def getJobsByPipelineId(projectId, pipelineId, cur, after, before):
                 conn.rollback()
 
 
-def getPipelinesByProjectId(projectId, cur, after, before):
+def getPipelinesByProjectId(projectId, cur):
     vazio = False
     page = 1
     while not vazio:
         res = realizaRequest(
-            f"/projects/{projectId}/pipelines?page={page}&per_page=100&created_after={after}&created_before={before}"
+            f"/projects/{projectId}/pipelines?page={page}&per_page=100&created_after={created_after}&created_before={created_before}"
         )
         pipelines = res.json()
         vazio = len(pipelines) < 100
@@ -174,15 +177,13 @@ def getPipelinesByProjectId(projectId, cur, after, before):
                     ),
                 )
                 conn.commit()
-                getJobsByPipelineId(projectId, pipeline["id"], cur, after, before)
+                getJobsByPipelineId(projectId, pipeline["id"], cur)
             except Exception as e:
                 conn.rollback()
                 print(e)
 
 
 caminho_arquivo = 'projetos.json'
-after = '2026-06-01T00:00:00Z';
-before = '2026-06-30T23:59:59Z';
 
 with conn.cursor() as cur:
     criaTabelas(cur)
@@ -203,6 +204,6 @@ with conn.cursor() as cur:
             except Exception as e:
                 conn.rollback()
                 print(e)    
-            getPipelinesByProjectId(projeto["id"], cur, after, before)
+            getPipelinesByProjectId(projeto["id"], cur)
 conn.commit()
 conn.close()
